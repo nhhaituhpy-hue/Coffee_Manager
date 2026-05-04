@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  
+  /* Cà phê đậm */
+  --color-primary: #5C3A21;
+  --color-primary-container: #8C5E3B;
+  --color-on-primary: #ffffff;
+  
+  /* Vàng sa mạc */
+  --color-secondary: #E6A822;
+  --color-secondary-container: #FAD586;
+  --color-on-secondary: #ffffff;
+  
+  /* Nâu đất nung / Terracotta */
+  --color-tertiary: #C36F49;
+  --color-tertiary-container: #E2A992;
+  --color-on-tertiary: #ffffff;
+  
+  /* Nền và Bề mặt sáng (Vàng cát sa mạc) */
+  --color-background: #F4EADA;
+  --color-surface: #FAF3E6;
+  --color-surface-container: #EAE0CD;
+  --color-surface-container-low: #F0E6D5;
+  --color-surface-container-high: #E4D9C6;
+  --color-surface-container-highest: #DED3BF;
+  
+  --color-on-surface: #38271D;
+  --color-on-surface-variant: #5A483E;
+  --color-outline: #8B7A70;
+  --color-outline-variant: #CBBAB0;
+  
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-sans antialiased;
+  }
+}
+
+.dark {
+  /* Vàng sa mạc cho Primary trên nền tối */
+  --color-primary: #DDA15E;
+  --color-primary-container: #875A31;
+  --color-on-primary: #1F140B;
+  
+  /* Vàng cát nhẹ cho Secondary */
+  --color-secondary: #E2B897;
+  --color-secondary-container: #5C3A21;
+  --color-on-secondary: #2B1D14;
+  
+  /* Terracotta sáng hơn cho Tertiary */
+  --color-tertiary: #E29578;
+  --color-tertiary-container: #7A3E26;
+  --color-on-tertiary: #FFFFFF;
+
+  /* Nền tối (Ca cao sữa) */
+  --color-background: #4A3525;
+  --color-surface: #58402D;
+  --color-surface-container: #664A35;
+  --color-surface-container-low: #5E4531;
+  --color-surface-container-high: #72543D;
+  --color-surface-container-highest: #7E5D44;
+  
+  --color-on-surface: #F4EADA;
+  --color-on-surface-variant: #DDCDBF;
+  --color-outline: #AFA094;
+  --color-outline-variant: #604A3C;
+}
+
+/* Custom styles for financial data */
+.font-financial {
+  font-feature-settings: "tnum" on, "lnum" on;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
