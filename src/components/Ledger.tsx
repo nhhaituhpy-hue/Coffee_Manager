@@ -199,6 +199,29 @@ export const Ledger: React.FC<LedgerProps> = ({ entries, setEntries, onEditDate 
         alternateRowStyles: { fillColor: [240, 253, 244] },
       });
 
+      // Bảng chia cổ tức
+      finalY = (doc as any).lastAutoTable.finalY || finalY + 20;
+
+      doc.setFontSize(12);
+      doc.setFont('Roboto', 'bold');
+      doc.setTextColor(0);
+      doc.text('Bảng chia cổ tức', 14, finalY + 15);
+
+      const dividendData = [
+        ['Mẹ Ngọc', `${(netProfit > 0 ? netProfit * 0.5 : 0).toLocaleString()} VNĐ`],
+        ['Hải Dung', `${(netProfit > 0 ? netProfit * 0.35 : 0).toLocaleString()} VNĐ`],
+        ['Bố Song', `${(netProfit > 0 ? netProfit * 0.15 : 0).toLocaleString()} VNĐ`],
+      ];
+
+      autoTable(doc, {
+        head: [['Tên', 'Chia cổ tức']],
+        body: dividendData,
+        startY: finalY + 20,
+        styles: { font: 'Roboto', fontSize: 11, cellPadding: 5 },
+        headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [254, 252, 232] },
+      });
+
       // Tự động tạo tên file theo tháng/năm đang chọn
       const monthMatch = validSelectedMonth.match(/Tháng (\d{2}), (\d{4})/);
       const fileName = monthMatch
