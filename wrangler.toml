@@ -1,0 +1,11 @@
+name = "hqscf"
+compatibility_date = "2024-05-01"
+pages_build_output_dir = "dist"
+
+[vars]
+ADMIN_PIN = "0301"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hqscf-db"
+database_id = "5371c5e3-85ce-4478-a832-0348095f65d0"

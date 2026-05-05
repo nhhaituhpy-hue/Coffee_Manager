@@ -20,64 +20,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     return localStorage.getItem('hqs_theme') || 'light';
   });
 
-  // Account settings state
-  const [accountTabState, setAccountTabState] = useState(() => {
-    const stored = localStorage.getItem('hqs_admin_creds');
-    return stored ? JSON.parse(stored) : { user: 'admin', pass: 'admin' };
-  });
-  const [newPass, setNewPass] = useState('');
-
   if (!isOpen) return null;
 
-  const handleUpdateAccount = () => {
-    if (!newPass) {
-      alert('Vui lòng nhập mật khẩu mới');
-      return;
-    }
-    const newCreds = { ...accountTabState, pass: newPass };
-    localStorage.setItem('hqs_admin_creds', JSON.stringify(newCreds));
-    setAccountTabState(newCreds);
-    setNewPass('');
-    alert('Đã cập nhật thông tin tài khoản thành công!');
-  };
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const handleBackup = () => {
-    const backupData: Record<string, string | null> = {};
-    
-    // Thu thập tất cả các key có tiền tố hqs_ trong localStorage
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('hqs_')) {
-        backupData[key] = localStorage.getItem(key);
+  const handleSyncToCloud = async () => {
+    setIsSyncing(true);
+    try {
+      const backupData: Record<string, string | null> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('hqs_')) {
+          backupData[key] = localStorage.getItem(key);
+        }
       }
+      
+      const response = await fetch('/api/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('hqs_admin_pin') || ''}`,
+        },
+        body: JSON.stringify(backupData),
+      });
+
+      if (response.ok) {
+        alert('Đã đồng bộ dữ liệu lên Cloud thành công!');
+      } else {
+        alert('Có lỗi xảy ra khi đồng bộ lên Cloud.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Lỗi kết nối đến Cloud.');
+    } finally {
+      setIsSyncing(false);
     }
-    
-    // Tạo file tên theo ngày giờ
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const fileName = `HQS_Backup_${timestamp}.json`;
-    
-    const dataBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const dataUrl = URL.createObjectURL(dataBlob);
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(dataUrl);
-    
-    alert('Đã xuất file sao lưu thành công!');
   };
 
-  const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string);
+  const handleSyncFromCloud = async () => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch('/api/data', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('hqs_admin_pin') || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
         let count = 0;
         
-        // Duyệt qua tất cả các key trong file backup và khôi phục vào localStorage
         Object.keys(data).forEach(key => {
           if (key.startsWith('hqs_') && data[key] !== null) {
             localStorage.setItem(key, data[key]);
@@ -86,18 +77,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         });
         
         if (count > 0) {
-          alert(`Khôi phục thành công ${count} mục dữ liệu! Ứng dụng sẽ tải lại.`);
+          alert(`Tải thành công ${count} mục dữ liệu từ Cloud! Ứng dụng sẽ tải lại.`);
           window.location.reload();
         } else {
-          alert('File JSON không chứa dữ liệu hợp lệ (thiếu tiền tố hqs_).');
+          alert('Không có dữ liệu trên Cloud hoặc dữ liệu trống.');
         }
-      } catch (err) {
-        alert('Lỗi khôi phục: File không hợp lệ hoặc bị hỏng.');
-        console.error(err);
+      } else {
+        alert('Có lỗi xảy ra khi tải dữ liệu từ Cloud.');
       }
-    };
-    reader.readAsText(file);
-    e.target.value = ''; // Reset input để có thể chọn lại cùng 1 file nếu cần
+    } catch (error) {
+      console.error(error);
+      alert('Lỗi kết nối đến Cloud.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -132,12 +125,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               >
                 Hệ Thống
               </button>
-              <button 
-                onClick={() => setActiveSettingsTab('account')}
-                className={`w-full text-left px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeSettingsTab === 'account' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}
-              >
-                Tài Khoản
-              </button>
+
               <button 
                 onClick={() => setActiveSettingsTab('theme')}
                 className={`w-full text-left px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeSettingsTab === 'theme' ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}
@@ -183,58 +171,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <h4 className="text-xs font-black text-outline uppercase tracking-widest">Thao tác dữ liệu</h4>
                     <div className="grid grid-cols-2 gap-4">
                       <button 
-                        onClick={handleBackup}
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-surface-container-high border border-outline-variant rounded-xl font-bold text-xs hover:bg-surface-container-highest transition-all">
-                        <Download size={16} /> Xuất Backup
+                        onClick={handleSyncToCloud}
+                        disabled={isSyncing}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white border border-outline-variant rounded-xl font-bold text-xs hover:opacity-90 transition-all disabled:opacity-50">
+                        <CloudUpload size={16} /> Đồng bộ lên Cloud
                       </button>
-                      <label className="flex items-center justify-center gap-2 px-4 py-3 bg-surface-container-high border border-outline-variant rounded-xl font-bold text-xs hover:bg-surface-container-highest transition-all cursor-pointer">
-                        <CloudUpload size={16} /> Restore Dữ Liệu
-                        <input type="file" accept=".json" className="hidden" onChange={handleRestore} />
-                      </label>
+                      <button
+                        onClick={handleSyncFromCloud}
+                        disabled={isSyncing}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-surface-container-high border border-outline-variant rounded-xl font-bold text-xs hover:bg-surface-container-highest transition-all disabled:opacity-50">
+                        <Download size={16} /> Tải từ Cloud
+                      </button>
                     </div>
                   </section>
                 </>
-              ) : activeSettingsTab === 'account' ? (
-                <section className="space-y-6">
-                  <h4 className="text-xs font-black text-outline uppercase tracking-widest">Quản lý tài khoản quản trị</h4>
-                  <div className="p-6 bg-surface-container border border-outline-variant rounded-2xl space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-on-surface">Tên đăng nhập (Username)</label>
-                      <input 
-                        type="text" 
-                        value={accountTabState.user}
-                        readOnly
-                        className="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-4 py-3 text-sm font-bold text-on-surface-variant outline-none"
-                      />
-                      <p className="text-[10px] text-outline italic">* Tên đăng nhập mặc định không thể thay đổi để bảo mật hệ thống.</p>
-                    </div>
-
-                    <div className="space-y-2 pt-2">
-                      <label className="text-xs font-bold text-on-surface">Mật khẩu mới (Password)</label>
-                      <input 
-                        type="password" 
-                        value={newPass}
-                        onChange={(e) => setNewPass(e.target.value)}
-                        placeholder="Nhập mật khẩu mới..."
-                        className="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 text-sm font-bold text-primary focus:ring-2 focus:ring-primary outline-none transition-all"
-                      />
-                    </div>
-
-                    <button 
-                      onClick={handleUpdateAccount}
-                      className="w-full py-3 bg-secondary text-white rounded-xl font-black text-xs shadow-md hover:opacity-90 flex items-center justify-center gap-2 mt-4"
-                    >
-                      <Save size={16} />
-                      Cập Nhật Mật Khẩu
-                    </button>
-                  </div>
-
-                  <div className="p-4 bg-error-container/10 border border-error/10 rounded-xl">
-                    <p className="text-xs text-error font-medium leading-relaxed">
-                      Lưu ý: Mật khẩu này được lưu trực tiếp trên máy tính này. Nếu bạn quên mật khẩu, bạn cần xóa dữ liệu trình duyệt để khôi phục về mặc định (admin/admin).
-                    </p>
-                  </div>
-                </section>
               ) : activeSettingsTab === 'theme' ? (
                 <section className="space-y-6">
                   <h4 className="text-xs font-black text-outline uppercase tracking-widest">Tùy chỉnh giao diện</h4>

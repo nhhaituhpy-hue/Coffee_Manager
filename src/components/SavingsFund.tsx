@@ -47,7 +47,7 @@ export const SavingsFund: React.FC = () => {
   const [filterText, setFilterText] = useState('');
 
   const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
-  const [adminPassword, setAdminPassword] = useState('');
+  const [adminPin, setAdminPin] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
@@ -98,20 +98,30 @@ export const SavingsFund: React.FC = () => {
     }
   };
 
-  const handleDeleteAllTransactions = () => {
-    const credsStr = localStorage.getItem('hqs_admin_creds');
-    const creds = credsStr ? JSON.parse(credsStr) : { pass: 'admin' };
+  const handleDeleteAllTransactions = async () => {
+    try {
+      const response = await fetch('/api/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pin: adminPin }),
+      });
 
-    if (adminPassword !== creds.pass) {
-      setDeleteError('Mật khẩu quản trị không đúng.');
-      return;
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setTransactions([]);
+        localStorage.setItem('hqs_savings_transactions', JSON.stringify([]));
+        setIsDeleteAllModalOpen(false);
+        setAdminPin('');
+        setDeleteError('');
+      } else {
+        setDeleteError('Mã PIN không đúng.');
+      }
+    } catch (err) {
+      setDeleteError('Lỗi kết nối máy chủ!');
     }
-
-    setTransactions([]);
-    localStorage.setItem('hqs_savings_transactions', JSON.stringify([]));
-    setIsDeleteAllModalOpen(false);
-    setAdminPassword('');
-    setDeleteError('');
   };
 
   const filteredTransactions = transactions.filter(tx =>
@@ -458,7 +468,7 @@ export const SavingsFund: React.FC = () => {
               className="absolute inset-0 bg-surface-container-highest/40 backdrop-blur-sm"
               onClick={() => {
                 setIsDeleteAllModalOpen(false);
-                setAdminPassword('');
+                setAdminPin('');
                 setDeleteError('');
               }}
             />
@@ -476,7 +486,7 @@ export const SavingsFund: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsDeleteAllModalOpen(false);
-                    setAdminPassword('');
+                    setAdminPin('');
                     setDeleteError('');
                   }}
                   className="text-outline hover:text-on-surface transition-colors"
@@ -491,17 +501,18 @@ export const SavingsFund: React.FC = () => {
                 </div>
                 <div>
                   <label className="flex items-center gap-2 text-sm font-bold text-on-surface-variant mb-2">
-                    <Lock size={16} /> Nhập mật khẩu "admin" để xác nhận
+                    <Lock size={16} /> Nhập mã PIN truy cập để xác nhận
                   </label>
                   <input
                     type="password"
-                    value={adminPassword}
+                    value={adminPin}
                     onChange={(e) => {
-                      setAdminPassword(e.target.value);
+                      setAdminPin(e.target.value);
                       if (deleteError) setDeleteError('');
                     }}
-                    placeholder="Nhập mật khẩu..."
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant focus:outline-none focus:border-error"
+                    maxLength={4}
+                    placeholder="Nhập mã PIN..."
+                    className="w-full px-4 py-3 rounded-xl border border-outline-variant focus:outline-none focus:border-error text-center tracking-[1em] text-xl"
                   />
                   {deleteError && (
                     <p className="text-error text-sm font-bold mt-2">{deleteError}</p>
@@ -513,7 +524,7 @@ export const SavingsFund: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsDeleteAllModalOpen(false);
-                    setAdminPassword('');
+                    setAdminPin('');
                     setDeleteError('');
                   }}
                   className="flex-1 py-3 text-on-surface-variant font-bold hover:bg-surface-container rounded-xl transition-colors"
@@ -522,7 +533,7 @@ export const SavingsFund: React.FC = () => {
                 </button>
                 <button
                   onClick={handleDeleteAllTransactions}
-                  disabled={!adminPassword}
+                  disabled={!adminPin}
                   className="flex-1 py-3 border border-error text-error bg-error/10 font-bold rounded-xl hover:bg-error/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Xác nhận xóa

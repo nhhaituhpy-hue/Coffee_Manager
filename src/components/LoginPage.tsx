@@ -7,34 +7,43 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    // Simulate network delay for feel
-    setTimeout(() => {
-      const storedCredentials = localStorage.getItem('hqs_admin_creds');
-      const creds = storedCredentials ? JSON.parse(storedCredentials) : { user: 'admin', pass: 'admin' };
+    try {
+      const response = await fetch('/api/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pin }),
+      });
 
-      if (username === creds.user && password === creds.pass) {
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         localStorage.setItem('hqs_is_logged_in', 'true');
+        localStorage.setItem('hqs_admin_pin', pin);
         onLogin();
       } else {
-        setError('Tài khoản hoặc mật khẩu không chính xác!');
-        setIsLoading(false);
+        setError('Mã PIN không chính xác!');
       }
-    }, 800);
+    } catch (err) {
+      setError('Lỗi kết nối máy chủ!');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background text-on-surface flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
@@ -52,8 +61,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
           <form onSubmit={handleLogin} className="p-8 space-y-6">
             {error && (
-              <motion.div 
-                initial={{ opacity: 0, x: -10 }} 
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="bg-error-container text-error p-4 rounded-xl flex items-center gap-3 border border-error/20"
               >
@@ -64,37 +73,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-outline uppercase tracking-widest px-1">Tài khoản quản trị</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" size={20} />
-                  <input 
-                    type="text" 
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    placeholder="Nhập username...(admin)"
-                    className="w-full pl-12 pr-4 py-3.5 bg-surface-container border border-outline-variant rounded-xl font-bold focus:ring-2 focus:ring-primary outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-outline uppercase tracking-widest px-1">Mật khẩu</label>
+                <label className="text-[10px] font-black text-outline uppercase tracking-widest px-1">Mã PIN truy cập</label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" size={20} />
-                  <input 
-                    type="password" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                  <input
+                    type="password"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
                     required
-                    placeholder="Nhập password...(admin)"
-                    className="w-full pl-12 pr-4 py-3.5 bg-surface-container border border-outline-variant rounded-xl font-bold focus:ring-2 focus:ring-primary outline-none transition-all"
+                    maxLength={4}
+                    placeholder="Nhập mã PIN..."
+                    className="w-full pl-12 pr-4 py-3.5 bg-surface-container border border-outline-variant rounded-xl font-bold focus:ring-2 focus:ring-primary outline-none transition-all text-center tracking-[1em] text-xl"
                   />
                 </div>
               </div>
             </div>
 
-            <button 
+            <button
               disabled={isLoading}
               className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group"
             >
@@ -115,7 +110,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </div>
           </form>
         </div>
-        
+
         <p className="text-center mt-8 text-on-surface-variant text-xs font-medium">
           Dữ liệu của bạn được lưu trữ an toàn ngay tại trình duyệt của bạn (Local Storage)
         </p>
