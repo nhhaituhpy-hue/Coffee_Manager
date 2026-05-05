@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { autoFormatAmountOnBlur } from '../utils';
 
 export const SavingsFund: React.FC = () => {
   const [transactions, setTransactions] = useState<any[]>(() => {
@@ -255,6 +256,10 @@ export const SavingsFund: React.FC = () => {
                     const val = e.target.value.replace(/\D/g, '');
                     setDepositAmount(val ? parseInt(val).toLocaleString('vi-VN') : '');
                   }}
+                  onBlur={() => {
+                    const raw = autoFormatAmountOnBlur(depositAmount);
+                    setDepositAmount(raw ? parseInt(raw).toLocaleString('vi-VN') : '');
+                  }}
                   className="min-w-0 flex-1 px-4 py-4 rounded-xl bg-surface/10 border border-white/20 text-white placeholder:text-white/50 focus:outline-none focus:border-white/50 font-financial font-bold"
                   autoFocus
                 />
@@ -413,13 +418,14 @@ export const SavingsFund: React.FC = () => {
                       const val = e.target.value.replace(/\D/g, '');
                       if (val) {
                         const num = parseInt(val);
-                        // Dont let them withdraw more than balance if we want to be strict, but currently just let it.
-                        // if (num > currentBalance) setWithdrawAmount(currentBalance.toLocaleString('vi-VN'));
-                        // else setWithdrawAmount(num.toLocaleString('vi-VN'));
                         setWithdrawAmount(num.toLocaleString('vi-VN'));
                       } else {
                         setWithdrawAmount('');
                       }
+                    }}
+                    onBlur={() => {
+                      const raw = autoFormatAmountOnBlur(withdrawAmount);
+                      setWithdrawAmount(raw ? parseInt(raw).toLocaleString('vi-VN') : '');
                     }}
                     placeholder="VD: 5.000.000"
                     className="w-full px-4 py-3 rounded-xl border border-outline-variant focus:outline-none focus:border-primary font-financial font-bold text-xl"

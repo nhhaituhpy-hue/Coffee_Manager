@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Save, Calendar, ChevronRight, Plus, Trash2, Check, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { DEFAULT_FIXED_EXPENSES } from '../constants';
+import { autoFormatAmountOnBlur } from '../utils';
 
 
 export const FixedExpenses: React.FC = () => {
@@ -36,6 +37,12 @@ export const FixedExpenses: React.FC = () => {
 
   const handleAmountChange = (id: string, value: string) => {
     const numericValue = parseInt(value.replace(/\D/g, ''), 10) || 0;
+    setExpenses(expenses.map(exp => exp.id === id ? { ...exp, amount: numericValue } : exp));
+  };
+
+  const handleAmountBlur = (id: string, value: number) => {
+    const raw = autoFormatAmountOnBlur(value);
+    const numericValue = parseInt(raw, 10) || 0;
     setExpenses(expenses.map(exp => exp.id === id ? { ...exp, amount: numericValue } : exp));
   };
 
@@ -119,6 +126,7 @@ export const FixedExpenses: React.FC = () => {
                       type="text"
                       value={expense.amount.toLocaleString('vi-VN')}
                       onChange={(e) => handleAmountChange(expense.id, e.target.value)}
+                      onBlur={() => handleAmountBlur(expense.id, expense.amount)}
                       className="w-full text-right bg-surface-container border border-transparent rounded-lg px-4 py-3 font-financial font-bold focus:ring-2 focus:ring-primary focus:bg-surface focus:border-transparent group-hover/input:border-outline-variant transition-all outline-none"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-outline pointer-events-none hidden focus-within:block opacity-50">VND</span>

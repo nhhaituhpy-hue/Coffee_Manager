@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Save, Trash2, PlusCircle, Info, PencilLine, Check, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatCurrency, parseCurrency } from '../utils';
+import { formatCurrency, parseCurrency, autoFormatAmountOnBlur } from '../utils';
 import { DEFAULT_EXPENSES } from '../constants';
 
 interface DailyEntryProps {
@@ -87,10 +87,23 @@ export const DailyEntry: React.FC<DailyEntryProps> = ({ entries, onUpdateEntry, 
     setRevenue(rawValue);
   };
 
+  const handleRevenueBlur = () => {
+    setRevenue(autoFormatAmountOnBlur(revenue));
+  };
+
   const handleExpenseChange = (id: number, field: string, value: string) => {
     setExpensesList(prev => prev.map(item => {
       if (item.id === id) {
         return { ...item, [field]: field === 'amount' ? parseCurrency(value) : value };
+      }
+      return item;
+    }));
+  };
+
+  const handleExpenseBlur = (id: number, value: string) => {
+    setExpensesList(prev => prev.map(item => {
+      if (item.id === id) {
+        return { ...item, amount: autoFormatAmountOnBlur(value) };
       }
       return item;
     }));
@@ -134,6 +147,7 @@ export const DailyEntry: React.FC<DailyEntryProps> = ({ entries, onUpdateEntry, 
             type="text"
             value={formatCurrency(revenue)}
             onChange={handleRevenueChange}
+            onBlur={handleRevenueBlur}
             placeholder="0"
             className="w-full text-right text-4xl font-black font-financial bg-transparent border-none focus:ring-0 transition-all py-2 pr-12 text-secondary focus:text-primary outline-none focus:outline-none"
           />
@@ -181,6 +195,7 @@ export const DailyEntry: React.FC<DailyEntryProps> = ({ entries, onUpdateEntry, 
                         type="text"
                         value={formatCurrency(item.amount)}
                         onChange={(e) => handleExpenseChange(item.id, 'amount', e.target.value)}
+                        onBlur={(e) => handleExpenseBlur(item.id, item.amount)}
                         className="w-full bg-transparent border-none font-bold text-right font-financial focus:ring-1 focus:ring-primary rounded-lg pr-4"
                       />
                       <span className="text-[10px] font-bold text-outline">đ</span>
