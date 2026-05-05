@@ -1,20 +1,30 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ☕ Coffee Manager
 
-# Run and deploy your AI Studio app
+Hệ thống quản lý quán cà phê hiện đại, tối ưu hóa quy trình theo dõi doanh thu.
 
-This contains everything you need to run your app locally.
+## 🚀 Tính năng chính
+*   Báo cáo doanh thu theo ngày/tháng
+*   Giao diện thân thiện, dễ sử dụng
 
-View your app in AI Studio: https://ai.studio/apps/ace7418d-bc2b-4418-9d3d-66bf9aa60973
+## 🛠️ Cài đặt và Chạy thử
 
-## Run Locally
+### Yêu cầu hệ thống
+*   Node.js (phiên bản 18 trở lên)
+*   npm 
 
-**Prerequisites:**  Node.js
+### Các bước thực hiện
+1.  **Cài đặt thư viện:**
+    ```bash
+    npm install
+    ```
+2.  **Chạy dự án ở chế độ phát triển:**
+    ```bash
+    npm run dev
+    ```
+3.  **Xây dựng bản sản xuất (Production):**
+    ```bash
+    npm run build
+    ```
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+*Phát triển bởi nhhaituhpy-hue*

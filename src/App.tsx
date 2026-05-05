@@ -13,7 +13,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 import { LoginPage } from './components/LoginPage';
 import { motion, AnimatePresence } from 'motion/react';
-import { MOCK_DAILY_ENTRIES } from './constants';
+import { DEFAULT_DAILY_ENTRIES } from './constants';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -26,7 +26,7 @@ export default function App() {
 
   const [entries, setEntries] = useState(() => {
     const stored = localStorage.getItem('hqs_ledger_entries');
-    return stored ? JSON.parse(stored) : MOCK_DAILY_ENTRIES;
+    return stored ? JSON.parse(stored) : DEFAULT_DAILY_ENTRIES;
   });
 
   useEffect(() => {

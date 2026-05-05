@@ -42,37 +42,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   const handleBackup = () => {
-    const data = {
-      hqs_ledger_entries: localStorage.getItem('hqs_ledger_entries'),
-      hqs_fixed_expenses: localStorage.getItem('hqs_fixed_expenses'),
-      hqs_savings_transactions: localStorage.getItem('hqs_savings_transactions'),
-    };
+    const backupData: Record<string, string | null> = {};
     
-    // Xuất data.json
-    const dataBlob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    // Thu thập tất cả các key có tiền tố hqs_ trong localStorage
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('hqs_')) {
+        backupData[key] = localStorage.getItem(key);
+      }
+    }
+    
+    // Tạo file tên theo ngày giờ
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `HQS_Backup_${timestamp}.json`;
+    
+    const dataBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
     const dataUrl = URL.createObjectURL(dataBlob);
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = `data.json`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(dataUrl);
-
-    // Xuất config.json
-    setTimeout(() => {
-      const configData = { 
-        hqs_shop_name: shopName, 
-        hqs_shop_location: shopLocation,
-        hqs_theme: theme,
-        hqs_admin_creds: JSON.stringify(accountTabState)
-      };
-      const configBlob = new Blob([JSON.stringify(configData, null, 2)], { type: 'application/json' });
-      const configUrl = URL.createObjectURL(configBlob);
-      const b = document.createElement('a');
-      b.href = configUrl;
-      b.download = `config.json`;
-      b.click();
-      URL.revokeObjectURL(configUrl);
-    }, 500);
+    
+    alert('Đã xuất file sao lưu thành công!');
   };
 
   const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,59 +75,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        let validData = false;
+        let count = 0;
         
-        if (data.hqs_ledger_entries !== undefined) {
-          localStorage.setItem('hqs_ledger_entries', data.hqs_ledger_entries);
-          validData = true;
-        }
-        if (data.hqs_fixed_expenses !== undefined) {
-          localStorage.setItem('hqs_fixed_expenses', data.hqs_fixed_expenses);
-          validData = true;
-        }
-        if (data.hqs_savings_transactions !== undefined) {
-          localStorage.setItem('hqs_savings_transactions', data.hqs_savings_transactions);
-          validData = true;
-        }
-        if (data.hqs_admin_creds !== undefined) {
-          localStorage.setItem('hqs_admin_creds', typeof data.hqs_admin_creds === 'string' ? data.hqs_admin_creds : JSON.stringify(data.hqs_admin_creds));
-          validData = true;
-        }
-        if (data.hqs_shop_name !== undefined) {
-          localStorage.setItem('hqs_shop_name', data.hqs_shop_name);
-          setShopName(data.hqs_shop_name);
-          validData = true;
-        }
-        if (data.hqs_shop_location !== undefined) {
-          localStorage.setItem('hqs_shop_location', data.hqs_shop_location);
-          setShopLocation(data.hqs_shop_location);
-          validData = true;
-        }
-        if (data.hqs_theme !== undefined) {
-          localStorage.setItem('hqs_theme', data.hqs_theme);
-          setTheme(data.hqs_theme);
-          validData = true;
-        }
+        // Duyệt qua tất cả các key trong file backup và khôi phục vào localStorage
+        Object.keys(data).forEach(key => {
+          if (key.startsWith('hqs_') && data[key] !== null) {
+            localStorage.setItem(key, data[key]);
+            count++;
+          }
+        });
         
-        if (validData) {
-          alert('Khôi phục dữ liệu thành công! Ứng dụng sẽ tải lại.');
+        if (count > 0) {
+          alert(`Khôi phục thành công ${count} mục dữ liệu! Ứng dụng sẽ tải lại.`);
           window.location.reload();
         } else {
-          alert('File JSON không chứa dữ liệu hợp lệ.');
+          alert('File JSON không chứa dữ liệu hợp lệ (thiếu tiền tố hqs_).');
         }
       } catch (err) {
-        alert('Lỗi khôi phục: File không hợp lệ.');
+        alert('Lỗi khôi phục: File không hợp lệ hoặc bị hỏng.');
         console.error(err);
       }
     };
     reader.readAsText(file);
-    e.target.value = '';
+    e.target.value = ''; // Reset input để có thể chọn lại cùng 1 file nếu cần
   };
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      >
         <motion.div 
+          onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}

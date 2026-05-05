@@ -13,8 +13,6 @@ export interface FixedExpense {
   id: string;
   category: string;
   amount: number;
-  status: 'PAID' | 'UNPAID';
-  icon: string;
 }
 
 export interface SavingTransaction {
