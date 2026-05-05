@@ -35,7 +35,7 @@ export const DailyEntry: React.FC<DailyEntryProps> = ({ entries, onUpdateEntry, 
 
   const existingEntry = entries.find(e => e.date === entryDateStr);
 
-  const [revenue, setRevenue] = useState(existingEntry?.revenue.toString() || '0');
+  const [revenue, setRevenue] = useState(existingEntry ? existingEntry.revenue.toString() : '');
 
   // Expenses state
   const [expensesList, setExpensesList] = useState(() => {
@@ -54,7 +54,7 @@ export const DailyEntry: React.FC<DailyEntryProps> = ({ entries, onUpdateEntry, 
         setExpensesList(existingEntry.details);
       }
     } else {
-      setRevenue('0');
+      setRevenue('');
       setExpensesList(DEFAULT_EXPENSES);
     }
   }, [existingEntry]);
@@ -111,7 +111,7 @@ export const DailyEntry: React.FC<DailyEntryProps> = ({ entries, onUpdateEntry, 
 
   const addExpense = () => {
     const newId = expensesList.length > 0 ? Math.max(...expensesList.map(item => item.id)) + 1 : 1;
-    setExpensesList([...expensesList, { id: newId, name: '', amount: '0' }]);
+    setExpensesList([...expensesList, { id: newId, name: '', amount: '' }]);
   };
 
   const removeExpense = (id: number) => {

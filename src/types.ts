@@ -12,7 +12,7 @@ export interface DailyEntry {
 export interface FixedExpense {
   id: string;
   category: string;
-  amount: number;
+  amount: number | string;
 }
 
 export interface SavingTransaction {

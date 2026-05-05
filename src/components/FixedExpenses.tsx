@@ -59,7 +59,7 @@ export const FixedExpenses: React.FC = () => {
     setExpenses([...expenses, {
       id: newId,
       category: 'Chi phí mới',
-      amount: 0,
+      amount: '',
     }]);
   };
 
@@ -124,7 +124,7 @@ export const FixedExpenses: React.FC = () => {
                   <div className="relative group/input flex-1">
                     <input
                       type="text"
-                      value={expense.amount.toLocaleString('vi-VN')}
+                      value={expense.amount ? expense.amount.toLocaleString('vi-VN') : ''}
                       onChange={(e) => handleAmountChange(expense.id, e.target.value)}
                       onBlur={() => handleAmountBlur(expense.id, expense.amount)}
                       className="w-full text-right bg-surface-container border border-transparent rounded-lg px-4 py-3 font-financial font-bold focus:ring-2 focus:ring-primary focus:bg-surface focus:border-transparent group-hover/input:border-outline-variant transition-all outline-none"
