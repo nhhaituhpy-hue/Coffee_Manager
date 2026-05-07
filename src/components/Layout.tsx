@@ -20,12 +20,22 @@ import { motion, AnimatePresence } from 'motion/react';
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  shopName: string;
+  shopLocation: string;
   onLogout: () => void;
   onSettingsClick: () => void;
   onAboutClick: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, onSettingsClick, onAboutClick }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  activeTab, 
+  setActiveTab, 
+  shopName,
+  shopLocation,
+  onLogout, 
+  onSettingsClick, 
+  onAboutClick 
+}) => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const menuItems = [
     { id: 'daily-entry', label: 'Nhập liệu hàng ngày', icon: Edit3 },
@@ -35,14 +45,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
   ];
 
   return (
-    <aside className="h-full w-64 bg-surface-container border-r border-outline-variant flex flex-col z-40">
+    <aside className="h-full w-64 bg-surface-container border-r border-outline-variant hidden md:flex flex-col z-40">
       <div className="p-6 mb-4">
         <h1 className="text-xl font-black text-primary leading-tight">
-          {localStorage.getItem('hqs_shop_name') || 'Hoa Quả Sơn Coffee'}
+          {shopName}
         </h1>
         <p className="text-xs text-on-surface-variant mt-4 mb-2 flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
-          {localStorage.getItem('hqs_shop_location') || '42 Lý Tự Trọng - Tuy Hòa'}
+          {shopLocation}
         </p>
       </div>
 

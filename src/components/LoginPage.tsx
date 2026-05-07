@@ -1,18 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Lock, User, Coffee, ChevronRight, AlertCircle } from 'lucide-react';
+import { Lock, User, Coffee, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
+import { checkAndPullFromCloud, storePinSecurely, storeSessionToken } from '../utils';
+import { validatePin } from '../validationUtils';
 
 interface LoginPageProps {
   onLogin: () => void;
+}
+
+/**
+ * Generate or retrieve a unique device/session ID
+ * This is used for rate limiting instead of IP address
+ * Ensures we don't block the entire WiFi network by mistake
+ */
+function getOrCreateSessionId(): string {
+  const STORAGE_KEY = 'hqs_session_id';
+  let sessionId = localStorage.getItem(STORAGE_KEY);
+  
+  if (!sessionId) {
+    // Generate a new session ID (8-char random string)
+    sessionId = Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    localStorage.setItem(STORAGE_KEY, sessionId);
+  }
+  
+  return sessionId;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId] = useState(() => getOrCreateSessionId());
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate PIN format
+    const validation = validatePin(pin);
+    if (!validation.valid) {
+      setError(validation.errors[0]?.message || 'Mã PIN không hợp lệ');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
@@ -22,20 +51,51 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ 
+          pin,
+          attemptKey: sessionId // Send session ID for rate limiting instead of IP
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
+        // Hash PIN before storing
+        const stored = await storePinSecurely(pin);
+        if (!stored) {
+          setError('Lỗi mã hóa PIN. Vui lòng thử lại.');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Lưu session token để dùng cho các request /api/data
+        if (data.sessionToken) {
+          storeSessionToken(data.sessionToken);
+        }
+        
         localStorage.setItem('hqs_is_logged_in', 'true');
-        localStorage.setItem('hqs_admin_pin', pin);
-        onLogin();
+        
+        try {
+          await checkAndPullFromCloud();
+        } catch (syncErr) {
+          console.error('Auto sync error:', syncErr);
+          // Don't prevent login if sync fails
+        }
+
+        window.location.reload();
       } else {
-        setError('Mã PIN không chính xác!');
+        // Show detailed error messages based on response
+        if (data.code === 'RATE_LIMITED') {
+          setError(`Bị khóa ${data.lockoutMinutes} phút do nhập sai quá nhiều lần. Thử lại sau.`);
+        } else if (data.failedAttempts) {
+          setError(`${data.message} (Lần thử: ${data.failedAttempts})`);
+        } else {
+          setError(data.message || 'Mã PIN không chính xác!');
+        }
       }
     } catch (err) {
-      setError('Lỗi kết nối máy chủ!');
+      const errorMessage = err instanceof Error ? err.message : 'Lỗi kết nối máy chủ!';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -79,22 +139,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   <input
                     type="password"
                     value={pin}
-                    onChange={(e) => setPin(e.target.value)}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
                     required
                     maxLength={4}
+                    inputMode="numeric"
                     placeholder="Nhập mã PIN..."
                     className="w-full pl-12 pr-4 py-3.5 bg-surface-container border border-outline-variant rounded-xl font-bold focus:ring-2 focus:ring-primary outline-none transition-all text-center tracking-[1em] text-xl"
+                    disabled={isLoading}
                   />
                 </div>
+                <p className="text-[10px] text-outline-variant px-1">Mã PIN gồm 4 chữ số</p>
               </div>
             </div>
 
             <button
-              disabled={isLoading}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group"
+              type="submit"
+              disabled={isLoading || pin.length !== 4}
+              className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  <span>Đang đăng nhập...</span>
+                </>
               ) : (
                 <>
                   Đăng nhập

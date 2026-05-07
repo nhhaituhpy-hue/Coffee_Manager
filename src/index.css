@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
 
 @theme {
   --font-sans: "Times New Roman", Times, serif;
@@ -94,4 +94,42 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
+}
+
+/* Mobile safe area for iPhone notch */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent overscroll bounce on mobile */
+@media (max-width: 767px) {
+  html, body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Hide custom scrollbar on mobile */
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .custom-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Touch-friendly targets */
+.mobile-touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* Bottom nav safe area padding */
+.pb-safe {
+  padding-bottom: calc(0.5rem + var(--safe-area-bottom));
+}
+
+.mb-safe {
+  margin-bottom: calc(4rem + var(--safe-area-bottom));
 }

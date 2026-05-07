@@ -1,8 +1,33 @@
 name = "hqscf"
-compatibility_date = "2024-05-01"
+compatibility_date = "2025-05-06"
 pages_build_output_dir = "dist"
 
-[[d1_databases]]
+# Environment Variables
+[env.production]
+vars = { ENVIRONMENT = "production", ADMIN_PIN_HASH = "ddb1369d147b442dd34d5a1b000084cdd96f70ca6535b8d6636fe676b6248955" }
+
+# D1 Database Binding (production)
+[[env.production.d1_databases]]
 binding = "DB"
 database_name = "hqscf-db"
 database_id = "5371c5e3-85ce-4478-a832-0348095f65d0"
+
+# KV Namespace for Rate Limiting (production)
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "a8e961225301435aa1be5b23b7f9734d"
+
+[env.preview]
+vars = { ENVIRONMENT = "preview", ADMIN_PIN_HASH = "ddb1369d147b442dd34d5a1b000084cdd96f70ca6535b8d6636fe676b6248955" }
+
+# D1 Database Binding (preview)
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "hqscf-db"
+database_id = "5371c5e3-85ce-4478-a832-0348095f65d0"
+
+# KV Namespace for Rate Limiting (preview)
+[[env.preview.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "a8e961225301435aa1be5b23b7f9734d"
+preview_id = "a8e961225301435aa1be5b23b7f9734d"

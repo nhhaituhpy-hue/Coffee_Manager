@@ -1,22 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { CalendarDays, FileSpreadsheet, FileText, ChevronLeft, ChevronRight, TrendingUp, Wallet, Receipt, Trash2, X, Loader2 } from 'lucide-react';
-import { formatCurrency } from '../utils';
+import { CalendarDays, FileSpreadsheet, FileText, ChevronLeft, ChevronRight, TrendingUp, Wallet, Receipt, Trash2, X, Loader2, AlertCircle } from 'lucide-react';
+import { formatCurrency, fetchCloudData, deleteCloudItem } from '../utils';
+import { loadVietnameseFont, loadVietnameseFontBold } from '../utils/pdfFontLoader';
 import { DEFAULT_FIXED_EXPENSES } from '../constants';
+import { DailyEntry } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { useResponsive } from '../responsiveUtils';
+import { EntryCard } from './EntryCard';
 
 interface LedgerProps {
-  entries: any[];
-  setEntries: (entries: any) => void;
+  entries: DailyEntry[];
+  setEntries: (entries: DailyEntry[]) => void;
   onEditDate: (dateStr: string) => void;
 }
 
 export const Ledger: React.FC<LedgerProps> = ({ entries, setEntries, onEditDate }) => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const { isMobile } = useResponsive();
+  const [cloudFixedExpenses, setCloudFixedExpenses] = useState<Record<string, any[]>>({});
+  const [cloudSavings, setCloudSavings] = useState<any[]>([]);
 
-  const handleDelete = () => {
+  useEffect(() => {
+    async function loadData() {
+      const data = await fetchCloudData();
+      if (data) {
+        if (data.hqs_fixed_expenses) setCloudFixedExpenses(data.hqs_fixed_expenses);
+        if (data.hqs_savings_transactions) setCloudSavings(data.hqs_savings_transactions);
+      }
+    }
+    loadData();
+  }, []);
+
+  const handleDelete = async () => {
     if (deleteConfirmId) {
-      setEntries((prev: any[]) => prev.filter(e => e.id !== deleteConfirmId));
+      setEntries(entries.filter(e => e.id !== deleteConfirmId));
+      await deleteCloudItem('entry', deleteConfirmId);
       setDeleteConfirmId(null);
     }
   };
@@ -24,9 +44,6 @@ export const Ledger: React.FC<LedgerProps> = ({ entries, setEntries, onEditDate 
   const today = new Date();
   const currentMonthStr = (today.getMonth() + 1).toString().padStart(2, '0');
   const currentYearStr = today.getFullYear().toString();
-  const previousMonth = today.getMonth() === 0 ? 12 : today.getMonth();
-  const previousMonthStr = previousMonth.toString().padStart(2, '0');
-  const previousYearStr = today.getMonth() === 0 ? (today.getFullYear() - 1).toString() : today.getFullYear().toString();
 
   const [selectedMonth, setSelectedMonth] = useState(`Tháng ${currentMonthStr}, ${currentYearStr}`);
   const [isExporting, setIsExporting] = useState(false);
@@ -40,16 +57,11 @@ export const Ledger: React.FC<LedgerProps> = ({ entries, setEntries, onEditDate 
   const last6Months = Array.from({ length: 12 }).map((_, i) => {
     let m = today.getMonth() - i;
     let y = today.getFullYear();
-    while (m < 0) {
-      m += 12;
-      y -= 1;
-    }
+    while (m < 0) { m += 12; y -= 1; }
     return `Tháng ${(m + 1).toString().padStart(2, '0')}, ${y}`;
   });
 
-  // Combine and remove duplicates, then sort in descending order
   const monthOptionsSet = new Set([...last6Months, ...availableMonths]);
-
   const allMonths = Array.from(monthOptionsSet).sort((a, b) => {
     const matchA = a.match(/Tháng (\d{2}), (\d{4})/);
     const matchB = b.match(/Tháng (\d{2}), (\d{4})/);
@@ -60,327 +72,360 @@ export const Ledger: React.FC<LedgerProps> = ({ entries, setEntries, onEditDate 
     return 0;
   });
 
-  // Ensure selectedMonth is valid or fallback
   const validSelectedMonth = allMonths.includes(selectedMonth) ? selectedMonth : allMonths[0];
-
   const match = validSelectedMonth.match(/Tháng (\d{2}), (\d{4})/);
+
+  // Hàm parse ngày an toàn cho cả DD-MM-YYYY và YYYY-MM-DD
+  const parseDateToTime = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length === 2) {
+      // DD-MM-YYYY -> YYYY-MM-DD
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  };
+
   const filteredEntries = match ? entries.filter(e => {
-    const d = new Date(e.date);
+    const time = parseDateToTime(e.date);
+    const d = new Date(time);
     return (d.getMonth() + 1) === parseInt(match[1]) && d.getFullYear() === parseInt(match[2]);
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : entries;
+  }).sort((a, b) => parseDateToTime(a.date) - parseDateToTime(b.date)) : entries;
 
   const totalFixedExpenses = React.useMemo(() => {
-    try {
-      const stored = localStorage.getItem('hqs_fixed_expenses');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed[validSelectedMonth]) {
-          return parsed[validSelectedMonth].reduce((sum: number, exp: any) => sum + exp.amount, 0);
-        }
-      }
-    } catch { }
-    return DEFAULT_FIXED_EXPENSES.reduce((sum, exp) => sum + exp.amount, 0);
-  }, [validSelectedMonth]);
+    if (cloudFixedExpenses[validSelectedMonth]) {
+      return cloudFixedExpenses[validSelectedMonth].reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0);
+    }
+    return DEFAULT_FIXED_EXPENSES.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+  }, [validSelectedMonth, cloudFixedExpenses]);
 
   const exportToPDF = async () => {
     setIsExporting(true);
     try {
+      // Load font Be Vietnam Pro từ local assets (bundled bởi Vite)
+      // Parallel load regular + bold để tối ưu thời gian
+      const [fontBase64, fontBoldBase64] = await Promise.all([
+        loadVietnameseFont(),
+        loadVietnameseFontBold(),
+      ]);
+
       const doc = new jsPDF();
-      let finalY = 0;
 
-      try {
-        const fontUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Regular.ttf';
-        const response = await fetch(fontUrl);
-        const fontBuffer = await response.arrayBuffer();
-        let binary = '';
-        const bytes = new Uint8Array(fontBuffer);
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64String = window.btoa(binary);
-        doc.addFileToVFS('Roboto-Regular.ttf', base64String);
-        doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
-
-        const fontBoldUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Medium.ttf';
-        const responseBold = await fetch(fontBoldUrl);
-        const fontBufferBold = await responseBold.arrayBuffer();
-        let binaryBold = '';
-        const bytesBold = new Uint8Array(fontBufferBold);
-        const lenBold = bytesBold.byteLength;
-        for (let i = 0; i < lenBold; i++) {
-          binaryBold += String.fromCharCode(bytesBold[i]);
-        }
-        const base64StringBold = window.btoa(binaryBold);
-        doc.addFileToVFS('Roboto-Medium.ttf', base64StringBold);
-        doc.addFont('Roboto-Medium.ttf', 'Roboto', 'bold');
-
-        doc.setFont('Roboto');
-      } catch (e) {
-        console.error('Failed to load font', e);
+      if (fontBase64) {
+        doc.addFileToVFS('BeVietnamPro.ttf', fontBase64);
+        doc.addFont('BeVietnamPro.ttf', 'BeVietnamPro', 'normal');
+      }
+      if (fontBoldBase64) {
+        doc.addFileToVFS('BeVietnamPro-Bold.ttf', fontBoldBase64);
+        doc.addFont('BeVietnamPro-Bold.ttf', 'BeVietnamPro', 'bold');
+      }
+      if (fontBase64 || fontBoldBase64) {
+        doc.setFont('BeVietnamPro');
+      } else {
+        doc.setFont('helvetica');
       }
 
-      // Add title
-      doc.setFontSize(16);
-      doc.setFont('Roboto', 'bold');
-      doc.text('Sổ doanh thu & Báo cáo', 14, 15);
+      const activeFont = fontBase64 ? 'BeVietnamPro' : 'helvetica';
+      const tableStyles = { font: activeFont, fontSize: 10 } as any;
+      const headStyles = { font: activeFont, fontStyle: 'normal' } as any;
 
-      // Add date range
-      doc.setFontSize(10);
-      doc.setFont('Roboto', 'normal');
-      doc.setTextColor(100);
-      doc.text(selectedMonth, 14, 22);
+      // Title
+      doc.setFontSize(18);
+      doc.text(`BÁO CÁO - ${validSelectedMonth.toUpperCase()}`, 105, 15, { align: 'center' });
 
-      const tableData = filteredEntries.map(entry => [
-        entry.date,
-        `${entry.revenue.toLocaleString()} VNĐ`,
-        `-${entry.expenses.toLocaleString()} VNĐ`,
-        `${entry.profit > 0 ? '+' : ''}${entry.profit.toLocaleString()} VNĐ`
-      ]);
+      const totalRevenue = filteredEntries.reduce((sum, e) => sum + e.revenue, 0);
+      const totalDailyExpenses = filteredEntries.reduce((sum, e) => sum + e.expenses, 0);
+      const totalExp = totalDailyExpenses + totalFixedExpenses;
+      const netProfit = totalRevenue - totalExp;
 
-
+      // 1. Summary Table
       autoTable(doc, {
-        head: [['Ngày', 'Tổng doanh thu', 'Tổng chi phí', 'Lợi nhuận']],
-        body: tableData,
-        startY: 28,
-        styles: { font: 'Roboto', fontSize: 10, cellPadding: 4 },
-        headStyles: { fillColor: [63, 114, 175], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
+        startY: 25,
+        head: [['Hạng mục', 'Giá trị (VND)']],
+        body: [
+          ['Tổng Doanh thu', totalRevenue.toLocaleString('vi-VN')],
+          ['Tổng Chi phí (Hàng ngày + Cố định)', totalExp.toLocaleString('vi-VN')],
+          ['Lợi nhuận', netProfit.toLocaleString('vi-VN')],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [26, 86, 219], ...headStyles },
+        styles: tableStyles,
       });
 
-      finalY = (doc as any).lastAutoTable.finalY || 28;
-
-      // Fixed Expenses
+      // 2. Dividend Table
+      const finalYSummary = (doc as any).lastAutoTable.finalY;
       doc.setFontSize(12);
-      doc.setFont('Roboto', 'bold');
-      doc.setTextColor(0);
-      doc.text('Chi phí cố định', 14, finalY + 15);
-
-      const fixedExpensesData = DEFAULT_FIXED_EXPENSES.map(exp => [
-        exp.category,
-        `${exp.amount.toLocaleString()} VNĐ`
-      ]);
+      doc.setFont(activeFont);
+      doc.text('BẢNG CHIA CỔ TỨC', 14, finalYSummary + 10);
 
       autoTable(doc, {
-        head: [['Loại chi phí', 'Số tiền']],
-        body: fixedExpensesData,
-        startY: finalY + 20,
-        styles: { font: 'Roboto', fontSize: 10, cellPadding: 4 },
-        headStyles: { fillColor: [63, 114, 175], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
+        startY: finalYSummary + 15,
+        head: [['Cổ đông', 'Tỉ lệ', 'Số tiền (VND)']],
+        body: [
+          ['Mẹ Ngọc', '50%', Math.floor(netProfit * 0.5).toLocaleString('vi-VN')],
+          ['Dung Hải', '35%', Math.floor(netProfit * 0.35).toLocaleString('vi-VN')],
+          ['Bố Song', '15%', Math.floor(netProfit * 0.15).toLocaleString('vi-VN')],
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], ...headStyles },
+        styles: tableStyles,
       });
 
-      finalY = (doc as any).lastAutoTable.finalY || finalY + 20;
-
-
-      // Summary Table
+      // 3. Savings Fund Table
+      const finalYDividends = (doc as any).lastAutoTable.finalY;
       doc.setFontSize(12);
-      doc.setFont('Roboto', 'bold');
-      doc.setTextColor(0);
-      doc.text('Bảng tổng kết', 14, finalY + 15);
+      doc.setFont(activeFont);
+      doc.text('QUỸ TIẾT KIỆM DỰ PHÒNG', 14, finalYDividends + 10);
 
-      const totalRevenue = filteredEntries.reduce((sum, entry) => sum + entry.revenue, 0);
-      const totalVariableExpenses = filteredEntries.reduce((sum, entry) => sum + entry.expenses, 0);
-      const totalExpenses = totalVariableExpenses + totalFixedExpenses;
-      const netProfit = totalRevenue - totalExpenses;
-
-      const summaryData = [
-        ['Tổng doanh thu', `${totalRevenue.toLocaleString()} VNĐ`],
-        ['Tổng chi phí (đã bao gồm chi phí cố định)', `${totalExpenses.toLocaleString()} VNĐ`],
-        ['Lợi nhuận ròng', `${netProfit > 0 ? '+' : ''}${netProfit.toLocaleString()} VNĐ`],
-      ];
+      const currentBalance = cloudSavings.reduce((sum, tx) => sum + (tx.amount ?? 0), 0);
+      const matchMonth = validSelectedMonth.match(/Tháng (\d{2}), (\d{4})/);
+      const targetMonthYear = matchMonth ? `${matchMonth[1]}/${matchMonth[2]}` : '';
+      const monthlySavings = cloudSavings.filter(tx => (tx.date ?? '').includes(targetMonthYear));
+      const monthlyDeposit = monthlySavings.reduce((sum, tx) => sum + (tx.amount > 0 ? tx.amount : 0), 0);
 
       autoTable(doc, {
-        head: [['Hạng mục', 'Tổng cộng']],
-        body: summaryData,
-        startY: finalY + 20,
-        styles: { font: 'Roboto', fontSize: 11, cellPadding: 5 },
-        headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [240, 253, 244] },
+        startY: finalYDividends + 15,
+        head: [['Hạng mục', 'Giá trị (VND)']],
+        body: [
+          ['Số dư quỹ hiện tại', currentBalance.toLocaleString('vi-VN')],
+          [`Trích lập trong ${validSelectedMonth}`, monthlyDeposit.toLocaleString('vi-VN')],
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [247, 194, 77], textColor: [139, 66, 66], ...headStyles },
+        styles: tableStyles,
       });
 
-      // Bảng chia cổ tức
-      finalY = (doc as any).lastAutoTable.finalY || finalY + 20;
+      // 4. Savings History
+      const finalYSavingsSummary = (doc as any).lastAutoTable.finalY;
+      if (monthlySavings.length > 0) {
+        doc.setFontSize(11);
+        doc.setFont(activeFont);
+        doc.text(`Lịch sử giao dịch quỹ - ${validSelectedMonth}`, 14, finalYSavingsSummary + 10);
+
+        autoTable(doc, {
+          startY: finalYSavingsSummary + 15,
+          head: [['Ngày', 'Nội dung', 'Số tiền']],
+          body: monthlySavings.map(tx => [
+            tx.date ?? '',
+            tx.description ?? '',
+            (tx.amount ?? 0).toLocaleString('vi-VN'),
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [214, 151, 96], ...headStyles },
+          styles: { ...tableStyles, fontSize: 9 },
+        });
+      }
+
+      // 5. Daily Entries Table
+      const lastY = (doc as any).lastAutoTable.finalY;
+      let nextY = lastY + 15;
+      if (nextY > 250) { doc.addPage(); nextY = 20; }
 
       doc.setFontSize(12);
-      doc.setFont('Roboto', 'bold');
-      doc.setTextColor(0);
-      doc.text('Bảng chia cổ tức', 14, finalY + 15);
-
-      const dividendData = [
-        ['Mẹ Ngọc', `${(netProfit > 0 ? netProfit * 0.5 : 0).toLocaleString()} VNĐ`],
-        ['Hải Dung', `${(netProfit > 0 ? netProfit * 0.35 : 0).toLocaleString()} VNĐ`],
-        ['Bố Song', `${(netProfit > 0 ? netProfit * 0.15 : 0).toLocaleString()} VNĐ`],
-      ];
+      doc.setFont(activeFont);
+      doc.text('BẢNG KÊ CHI TIẾT THEO NGÀY', 14, nextY - 5);
 
       autoTable(doc, {
-        head: [['Tên', 'Chia cổ tức']],
-        body: dividendData,
-        startY: finalY + 20,
-        styles: { font: 'Roboto', fontSize: 11, cellPadding: 5 },
-        headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [254, 252, 232] },
+        startY: nextY,
+        head: [['Ngày', 'Doanh thu', 'Chi phí', 'Lợi nhuận']],
+        body: filteredEntries.map(e => [
+          e.date,
+          e.revenue.toLocaleString('vi-VN'),
+          e.expenses.toLocaleString('vi-VN'),
+          e.profit.toLocaleString('vi-VN'),
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [75, 85, 99], ...headStyles },
+        styles: { ...tableStyles, fontSize: 9 },
       });
 
-      // Tự động tạo tên file theo tháng/năm đang chọn
-      const monthMatch = validSelectedMonth.match(/Tháng (\d{2}), (\d{4})/);
-      const fileName = monthMatch
-        ? `Báo cáo doanh thu tháng ${parseInt(monthMatch[1])}-${monthMatch[2]}.pdf`
-        : 'Bao-cao-doanh-thu.pdf';
+      // 6. Fixed Expenses Table
+      const finalYDaily = (doc as any).lastAutoTable.finalY;
+      let nextYFixed = finalYDaily + 15;
+      if (nextYFixed > 250) { doc.addPage(); nextYFixed = 20; }
 
-      doc.save(fileName);
+      doc.setFontSize(12);
+      doc.setFont(activeFont);
+      doc.text('BẢNG KÊ CHI PHÍ CỐ ĐỊNH', 14, nextYFixed - 5);
+
+      const currentFixed = cloudFixedExpenses[validSelectedMonth] || DEFAULT_FIXED_EXPENSES;
+      autoTable(doc, {
+        startY: nextYFixed,
+        head: [['Nội dung chi phí', 'Số tiền (VND)']],
+        body: currentFixed.map((exp: any) => [
+          exp.category ?? '',
+          (Number(exp.amount) || 0).toLocaleString('vi-VN'),
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [107, 114, 128], ...headStyles },
+        styles: { ...tableStyles, fontSize: 9 },
+      });
+
+      doc.save(`Báo Cáo ${validSelectedMonth.replace(/, /g, '-')}.pdf`);
     } catch (e) {
-      console.error(e);
-      alert('Có lỗi xảy ra khi xuất PDF. Vui lòng thử lại.');
+      console.error('PDF Export Error:', e);
+      alert(`Lỗi khi xuất PDF: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsExporting(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row items-start md:items-center mb-8 gap-4">
-        <div className="flex-none">
-          <h2 className="text-3xl font-bold">Sổ doanh thu & Báo cáo</h2>
-          <p className="text-on-surface-variant text-sm mt-1">Theo dõi chi tiết các giao dịch tài chính hàng ngày.</p>
-        </div>
-        <div className="flex-1 flex justify-center w-full md:w-auto">
-          <div className="flex items-center gap-3 bg-surface border border-outline-variant px-5 py-2.5 rounded-xl shadow-sm hover:bg-surface-container transition-colors cursor-pointer group relative">
-            <CalendarDays size={18} className="text-primary" />
-            <select
-              className="bg-transparent border-none text-sm font-bold p-0 focus:ring-0 text-primary cursor-pointer outline-none appearance-none pr-6 z-10"
-              value={validSelectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-            >
-              {allMonths.map(month => (
-                <option key={month}>{month}</option>
-              ))}
-            </select>
-            <ChevronRight size={16} className="text-primary absolute right-4 rotate-90 pointer-events-none" />
+    <div className="flex flex-col h-full space-y-6 overflow-y-auto custom-scrollbar pb-24 pr-1 overscroll-contain">
+      {/* Top Section: Header, Month Selector, Summary, and Export Button */}
+      <div className="flex-none space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
+          <div className="flex-none">
+            <h2 className="text-xl md:text-3xl font-bold">Sổ doanh thu & Báo cáo</h2>
+            <p className="text-on-surface-variant text-[10px] md:text-sm mt-0.5">Dữ liệu được lưu trữ an toàn trên đám mây.</p>
           </div>
-        </div>
-      </div>
+          <div className="flex-none">
+            <div className="relative flex items-center gap-2 bg-surface border border-outline-variant px-4 py-2.5 rounded-xl shadow-sm hover:bg-surface-container transition-all cursor-pointer group">
+              <CalendarDays size={18} className="text-primary" />
+              <span className="text-sm font-black text-primary">{validSelectedMonth}</span>
 
-      <div className="bg-surface border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-auto max-h-[500px]">
-          <table className="w-full text-left border-collapse relative">
-            <thead className="sticky top-0 z-10 shadow-sm">
-              <tr className="bg-surface-container border-b border-outline-variant text-[11px] font-black text-outline uppercase tracking-widest">
-                <th className="px-8 py-5">Ngày</th>
-                <th className="px-8 py-5 text-right">Tổng Doanh Thu</th>
-                <th className="px-8 py-5 text-right">Tổng Chi Phí</th>
-                <th className="px-8 py-5 text-right">Lợi Nhuận</th>
-                <th className="px-8 py-5 text-right">Hành động</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredEntries.map((entry, idx) => (
-                <tr key={entry.id} onClick={() => onEditDate(entry.date)} className={`hover:bg-blue-50/30 transition-colors cursor-pointer group ${idx % 2 === 1 ? 'bg-surface-container/20' : ''}`}>
-                  <td className="px-8 py-5 font-bold text-primary text-sm group-hover:underline decoration-2 underline-offset-4">{entry.date}</td>
-                  <td className="px-8 py-5 text-right font-financial font-bold text-on-surface">
-                    {entry.revenue.toLocaleString()}đ
-                  </td>
-                  <td className="px-8 py-5 text-right font-financial font-bold text-tertiary">-{entry.expenses.toLocaleString()}đ</td>
-                  <td className="px-8 py-5 text-right font-financial font-black text-secondary">{entry.profit > 0 ? '+' : ''}{entry.profit.toLocaleString()}đ</td>
-                  <td className="px-8 py-5 text-right">
-                    <button
-                      className="p-2 text-tertiary bg-tertiary/5 hover:bg-tertiary/10 rounded-lg transition-all"
-                      title="Xóa dữ liệu ngày"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmId(entry.id);
-                      }}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-6 bg-surface-container border-t border-outline-variant flex gap-4">
-          <div className="flex gap-2">
+              <select
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                value={validSelectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+              >
+                {allMonths.map(month => (
+                  <option key={month} value={month} className="bg-surface text-on-surface">{month}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {!isMobile && (
             <button
               onClick={exportToPDF}
               disabled={isExporting}
-              className="flex items-center gap-2 px-6 py-2 bg-surface border border-outline-variant rounded-lg text-xs font-bold hover:shadow-md transition-all disabled:opacity-70 disabled:cursor-not-allowed">
-              {isExporting ? <Loader2 size={16} className="animate-spin text-tertiary" /> : <FileText size={16} className="text-tertiary" />}
-              {isExporting ? 'Đang xuất...' : 'Xuất PDF'}
+              className="flex items-center gap-2 px-4 py-2.5 bg-surface border border-outline-variant rounded-xl text-sm font-bold shadow-sm hover:bg-surface-container transition-all active:scale-95 disabled:opacity-50 ml-auto"
+            >
+              <FileText size={18} className="text-tertiary" />
+              {isExporting ? 'Đang xuất...' : 'Xuất Báo cáo'}
             </button>
+          )}
+        </div>
+
+        {/* Summary Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+          <div className="bg-surface p-4 rounded-2xl border-l-4 border-secondary shadow-sm">
+            <span className="text-[10px] font-black text-outline uppercase tracking-widest">Doanh thu {validSelectedMonth}</span>
+            <p className="text-xl font-black font-financial">{filteredEntries.reduce((sum, entry) => sum + entry.revenue, 0).toLocaleString()}đ</p>
+          </div>
+          <div className="bg-surface p-4 rounded-2xl border-l-4 border-tertiary shadow-sm">
+            <span className="text-[10px] font-black text-outline uppercase tracking-widest">Tổng chi {validSelectedMonth}</span>
+            <p className="text-xl font-black font-financial">{(filteredEntries.reduce((sum, entry) => sum + entry.expenses, 0) + totalFixedExpenses).toLocaleString()}đ</p>
+          </div>
+          <div className="bg-primary text-white p-4 rounded-2xl shadow-lg">
+            <span className="text-[10px] font-black opacity-60 uppercase tracking-widest">Lợi nhuận ròng</span>
+            <p className="text-xl font-black font-financial">{(filteredEntries.reduce((sum, entry) => sum + entry.revenue, 0) - (filteredEntries.reduce((sum, entry) => sum + entry.expenses, 0) + totalFixedExpenses)).toLocaleString()}đ</p>
           </div>
         </div>
+
+        {/* PDF Export Button (Moved up for mobile) */}
+        {isMobile && (
+          <button
+            onClick={exportToPDF}
+            disabled={isExporting}
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-surface border border-outline-variant rounded-xl text-sm font-bold shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-50"
+          >
+            <FileText size={18} className="text-tertiary" />
+            {isExporting ? 'Đang xuất...' : 'Xuất Báo Cáo PDF'}
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-surface p-6 rounded-2xl border-l-4 border-secondary shadow-sm">
-          <div className="flex justify-between items-start mb-4">
-            <span className="text-[10px] font-black text-outline uppercase tracking-widest">Tổng doanh thu {selectedMonth.split(',')[0].toLowerCase()}</span>
-            <TrendingUp className="text-secondary" />
+      {/* Bottom Section: Scrollable Entries List/Table */}
+      <div className="flex-none bg-surface border border-outline-variant rounded-2xl shadow-sm overflow-hidden flex flex-col">
+        {isMobile ? (
+          <div className="overflow-y-auto p-3 space-y-3 max-h-[320px] custom-scrollbar overscroll-contain">
+            {filteredEntries.map((entry, idx) => (
+              <EntryCard
+                key={entry.id}
+                entry={entry}
+                onEdit={onEditDate}
+                onDelete={(id) => setDeleteConfirmId(id)}
+                index={idx}
+              />
+            ))}
+            {filteredEntries.length === 0 && (
+              <div className="py-10 text-center">
+                <p className="text-outline text-sm">Không có dữ liệu trong tháng này</p>
+              </div>
+            )}
           </div>
-          <p className="text-3xl font-black font-financial">{filteredEntries.reduce((sum, entry) => sum + entry.revenue, 0).toLocaleString()}đ</p>
-        </div>
-        <div className="bg-surface p-6 rounded-2xl border-l-4 border-tertiary shadow-sm">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-black text-outline uppercase tracking-widest">Tổng chi {validSelectedMonth.split(',')[0].toLowerCase()}</span>
-              <span className="text-[9px] text-tertiary font-bold">(Bao gồm cả chi cố định)</span>
-            </div>
-            <Receipt className="text-tertiary" />
+        ) : (
+          <div className="flex-1 overflow-auto custom-scrollbar max-h-[350px]">
+            <table className="w-full text-left border-collapse relative">
+              <thead className="sticky top-0 z-10 shadow-sm">
+                <tr className="bg-surface-container border-b border-outline-variant text-[11px] font-black text-outline uppercase tracking-widest">
+                  <th className="px-5 py-3">Ngày</th>
+                  <th className="px-5 py-3 text-right">Tổng Doanh Thu</th>
+                  <th className="px-5 py-3 text-right">Tổng Chi Phí</th>
+                  <th className="px-5 py-3 text-right">Lợi Nhuận</th>
+                  <th className="px-5 py-3 text-right">Hành động</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredEntries.map((entry) => (
+                  <tr key={entry.id} onClick={() => onEditDate(entry.date)} className="hover:bg-blue-50/30 transition-colors cursor-pointer group">
+                    <td className="px-5 py-3 font-bold text-primary text-sm">{entry.date}</td>
+                    <td className="px-5 py-3 text-right font-financial font-bold">{entry.revenue.toLocaleString()}đ</td>
+                    <td className="px-5 py-3 text-right font-financial font-bold text-tertiary">-{entry.expenses.toLocaleString()}đ</td>
+                    <td className="px-5 py-3 text-right font-financial font-black text-secondary">{entry.profit.toLocaleString()}đ</td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        className="p-2 text-tertiary hover:bg-tertiary/10 rounded-lg"
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(entry.id); }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <p className="text-3xl font-black font-financial">{(filteredEntries.reduce((sum, entry) => sum + entry.expenses, 0) + totalFixedExpenses).toLocaleString()}đ</p>
-        </div>
-        <div className="bg-primary text-white p-6 rounded-2xl shadow-lg">
-          <div className="flex justify-between items-start mb-4">
-            <span className="text-[10px] font-black opacity-60 uppercase tracking-widest">Lợi nhuận {validSelectedMonth.split(',')[0].toLowerCase()}</span>
-            <Wallet className="opacity-80" />
-          </div>
-          <p className="text-3xl font-black font-financial">{(filteredEntries.reduce((sum, entry) => sum + entry.revenue, 0) - (filteredEntries.reduce((sum, entry) => sum + entry.expenses, 0) + totalFixedExpenses)).toLocaleString()}đ</p>
-        </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmId && (
-        <div
-          className="fixed inset-0 bg-surface-container-highest/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 min-h-screen animate-in fade-in duration-200"
-          onClick={() => setDeleteConfirmId(null)}
-        >
-          <div
-            className="bg-surface rounded-2xl p-6 w-full max-w-sm shadow-xl flex flex-col pt-8 relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setDeleteConfirmId(null)}
-              className="absolute top-4 right-4 p-2 text-outline hover:bg-surface-container-high rounded-full transition-colors"
+      <AnimatePresence>
+        {deleteConfirmId && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setDeleteConfirmId(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-surface rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-outline-variant"
             >
-              <X size={16} />
-            </button>
-            <div className="flex justify-center mb-6">
-              <div className="w-16 h-16 bg-tertiary/10 text-tertiary rounded-full flex items-center justify-center">
-                <Trash2 size={32} />
+              <div className="w-20 h-20 bg-tertiary/10 text-tertiary rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} />
               </div>
-            </div>
-            <h3 className="text-center font-bold text-xl mb-2 text-on-surface">Xác nhận xóa sổ</h3>
-            <p className="text-center text-sm font-medium text-on-surface-variant mb-6 px-2">
-              Bạn có chắc chắn muốn xóa bản ghi của ngày này không? Dữ liệu bên nhập liệu sẽ được làm trống ngay lập tức.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirmId(null)}
-                className="flex-1 py-3 px-4 rounded-xl font-bold bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest transition-colors"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 px-4 rounded-xl font-bold bg-tertiary text-white shadow-sm hover:opacity-90 hover:shadow-md transition-all active:scale-[0.98]"
-              >
-                Xóa bản ghi
-              </button>
-            </div>
+              <h3 className="text-2xl font-black text-on-surface mb-2">Xác nhận xóa</h3>
+              <p className="text-on-surface-variant text-sm mb-8 leading-relaxed">
+                Dữ liệu của ngày này sẽ bị xóa vĩnh viễn khỏi hệ thống đám mây. Hành động này không thể hoàn tác.
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1 py-4 font-bold bg-surface-container hover:bg-surface-container-highest text-on-surface-variant rounded-2xl transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 py-4 font-bold bg-tertiary text-white rounded-2xl shadow-lg shadow-tertiary/20 hover:opacity-90 active:scale-95 transition-all"
+                >
+                  Xóa ngay
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 };
